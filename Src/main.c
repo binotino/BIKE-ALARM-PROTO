@@ -33,11 +33,13 @@
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 uint8_t DemoIndex = 0;
+
+// ***  MR MODIFIED THIS SECTION ***
 BSP_DemoTypedef  BSP_examples[]={
-  {ACCELERO_MEMS_Test, "LSM303DLHC/LSM303AGR", 0},
-//  {GYRO_MEMS_Test, "L3GD20TR/I3G4250D", 1},
-//  {AudioPlay_Test, "CS43L22", 2},
-  {AudioRecord_Test, "MP45DT02TR-M/IMP34DT05TR", 1},
+  {AudioRecord_Test, "MP45DT02TR-M/IMP34DT05TR", 0},   // *MR* Reorder to allow for alarm feature
+  {ACCELERO_MEMS_Test, "LSM303DLHC/LSM303AGR", 1},     // *MR* Reorder to allow for alarm feature
+//  {GYRO_MEMS_Test, "L3GD20TR/I3G4250D", 2},          // *MR* commented out
+//  {AudioPlay_Test, "CS43L22", 3},                    // *MR* commented out
 };
 
 __IO uint8_t UserPressButton = 0;

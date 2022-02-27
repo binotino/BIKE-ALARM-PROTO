@@ -34,13 +34,27 @@
 /* Private variables ---------------------------------------------------------*/
 extern __IO uint8_t UserPressButton;
 
+/* Variable used to replay audio sample (from play or record test)*/
+extern uint32_t AudioTest; // *MR*
+/* Variables used in normal mode to manage audio file during DMA transfer  *MR*  */
+extern uint32_t AudioTotalSize; /* This variable holds the total size of the audio file */
+extern uint32_t AudioRemSize;   /* This variable holds the remaining data in audio file */
+extern uint16_t *CurrentPos;   /* This variable holds the current position of audio pointer */
+extern uint16_t WrBuffer[WR_BUFFER_SIZE];
+
 /* Init af threshold to detect acceleration on MEMS */
 int16_t ThresholdHigh = 1000;
 int16_t ThresholdLow = -1000;
 
+uint32_t alarm_trigger = 0;
+uint32_t trigger_neg_x = 0;
+uint32_t trigger_pos_x = 0;
+uint32_t trigger_neg_y = 0;
+uint32_t trigger_pos_y = 0;
+
 /* Private function prototypes -----------------------------------------------*/
 static void ACCELERO_ReadAcc(void);
-static void GYRO_ReadAng(void);
+// static void GYRO_ReadAng(void);  DELETED GYRO SECTION *MR*
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -58,12 +72,55 @@ void ACCELERO_MEMS_Test(void)
     /* Initialization Error */
     Error_Handler(); 
   }
+  // ADD PLAY FROM MEMORY *MR*
+  /* Play in the loop the recorded file */
+
+  /* Set variable to indicate play from record buffer */
+  AudioTest = 1;
+
+  /* Set variable used to stop player before starting */
+  UserPressButton = 0;
+
+  /* Initialize audio IN at REC_FREQ */
+  BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, 70, DEFAULT_AUDIO_IN_FREQ);
+
+  /* Set the total number of data to be played */
+  AudioTotalSize = AUDIODATA_SIZE * WR_BUFFER_SIZE;
+  /* Update the remaining number of data to be played */
+  AudioRemSize = 0;
+  /* Update the WrBuffer audio pointer position */
+  CurrentPos = (uint16_t *)(WrBuffer);
+
+  /* Play the recorded buffer */
+//  BSP_AUDIO_OUT_Play(WrBuffer , AudioTotalSize);
   
   UserPressButton = 0;
-  while(!UserPressButton)
+  while(!UserPressButton && !alarm_trigger)
   {
     ACCELERO_ReadAcc();
   }
+
+  /* Play the recorded buffer */
+  BSP_AUDIO_OUT_Play(WrBuffer , AudioTotalSize);
+  UserPressButton = 0;
+  while(!UserPressButton && alarm_trigger)
+  {
+  }
+
+  alarm_trigger = 0;
+  trigger_neg_x = 0;
+  trigger_pos_x = 0;
+  trigger_neg_y = 0;
+  trigger_pos_y = 0;
+
+// *MR*
+  /* Stop Player before close Test */
+  if (BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW) != AUDIO_OK)
+  {
+    /* Audio Stop error */
+    Error_Handler();
+  }
+// *MR*
 }  
 
 /**
@@ -89,12 +146,14 @@ static void ACCELERO_ReadAcc(void)
       /* LED5 On */
       BSP_LED_On(LED5);
       HAL_Delay(10);
+      trigger_pos_x = 1;
     }
     else if(xval < ThresholdLow)
     { 
       /* LED4 On */
       BSP_LED_On(LED4);      
       HAL_Delay(10);
+      trigger_neg_x = 1;
     }
     else
     { 
@@ -108,137 +167,31 @@ static void ACCELERO_ReadAcc(void)
       /* LED6 On */
       BSP_LED_On(LED6);
       HAL_Delay(10);
+      trigger_neg_y = 1;
     }
     else if(yval > ThresholdHigh)
     {
       /* LED3 On */
       BSP_LED_On(LED3);
       HAL_Delay(10);
-
-
-      /* Play the recorded buffer */
-//      BSP_AUDIO_OUT_Play(WrBuffer , AudioTotalSize);
-
- //     HAL_Delay(10);
-
-      /* Stop Player before close Test */
-//      if (BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW) != AUDIO_OK)
-      //      {
-        /* Audio Stop error */
-      //        Error_Handler();
-      //      }
+      trigger_pos_y = 1;
     } 
     else
     { 
       HAL_Delay(10);
     }
   } 
-  
+  if(trigger_neg_x == 1 && trigger_pos_x == 1 && trigger_neg_y == 1 && trigger_pos_y == 1)
+  {
+	  alarm_trigger = 1;
+  }
+
   BSP_LED_Off(LED3);
   BSP_LED_Off(LED4);
   BSP_LED_Off(LED5);
   BSP_LED_Off(LED6);
 }
+//  DELETED GYRO SECTION *MR*
 
-/**
-  * @brief  Test Gyroscope MEMS Hardware.
-  *         The main objectif of this test is to check the hardware connection of the 
-  *         MEMS peripheral.
-  * @param  None
-  * @retval None
-  */
-void GYRO_MEMS_Test(void)
-{
-  /* Init Gyroscope MEMS */
-  if(BSP_ACCELERO_Init() != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler(); 
-  }
-  
-  UserPressButton = 0;
-  while(!UserPressButton)
-  {
-    GYRO_ReadAng();
-  }
-}  
-
-/**
-  * @brief  Read Gyroscope Angular data.
-  * @param  None
-  * @retval None
-  */
-static void GYRO_ReadAng(void)
-{
-  /* Gyroscope variables */
-  float Buffer[3];
-  float Xval, Yval = 0x00;
-  
-  /* Init Gyroscope Mems */
-  if(BSP_GYRO_Init() != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler(); 
-  }
-  
-  /* Read Gyroscope Angular data */
-  BSP_GYRO_GetXYZ(Buffer);
-  
-  Xval = ABS((Buffer[0]));
-  Yval = ABS((Buffer[1])); 
-  
-  if(Xval>Yval)
-  {
-    if(Buffer[0] > 5000.0f)
-    { 
-      /* LED5 On */
-      BSP_LED_On(LED5);
-      HAL_Delay(10);
-    }
-    else if(Buffer[0] < -5000.0f)
-    { 
-      /* LED4 On */
-      BSP_LED_On(LED4);
-      HAL_Delay(10);
-    }
-    else
-    { 
-      HAL_Delay(10);
-    }
-  }
-  else
-  {
-    if(Buffer[1] < -5000.0f)
-    {
-      /* LED6 On */
-      BSP_LED_On(LED6);
-      
-      HAL_Delay(10);
-    }
-    else if(Buffer[1] > 5000.0f)
-    {
-      /* LED3 On */
-      BSP_LED_On(LED3);
-      HAL_Delay(10);
-    } 
-    else
-    { 
-      HAL_Delay(10);
-    }
-  } 
-  
-  BSP_LED_Off(LED3);
-  BSP_LED_Off(LED4);
-  BSP_LED_Off(LED5);
-  BSP_LED_Off(LED6);
-}
-
-/**
-  * @}
-  */ 
-
-/**
-  * @}
-  */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
